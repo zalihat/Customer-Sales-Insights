@@ -10,10 +10,6 @@ from sklearn.utils import resample
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 
-
-
-
-
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s',  stream=sys.stdout  )
 
@@ -21,6 +17,7 @@ class DataCleaner:
   def __init__(self, dataset, output_path):
     self.dataset = dataset
     self.output_path = output_path
+    os.makedirs(self.output_path, exist_ok=True)
   def download_dataset(self):
       try:
           path = kagglehub.dataset_download(self.dataset)
@@ -28,14 +25,14 @@ class DataCleaner:
           logging.info("Path to dataset files: %s", path)
           result = subprocess.run(["ls", path], capture_output=True, text=True)
           if result.stdout:
-                  logging.info("Dataset files:\n%s", result.stdout)
+            logging.info("Dataset files:\n%s", result.stdout)
           if result.stderr:
-                  logging.error("Error listing files:\n%s", result.stderr)
+            logging.error("Error listing files:\n%s", result.stderr)
           return path
       except Exception as e:
           logging.exception("Error downloading dataset: %s", e)
 
-  def load_data(self):
+  def load_data(self):  
     try:
       # List all CSV files in the directory
       path = self.download_dataset()
@@ -92,15 +89,20 @@ class DataCleaner:
       """
       before = df.shape[0]
       duplicate_count = df.duplicated(subset=columns, keep=False).sum()
+      logging.info("Number of duplicated rows: %s", duplicate_count )
 
       if duplicate_count > 0:
-          print(f"⚠️ Found {duplicate_count} duplicate rows based on {columns}. Removing them...")
+          logging.info("Found %s duplicate rows basedon %s Removing them...", duplicate_count,columns)
+          # print(f"⚠️ Found {duplicate_count} duplicate rows based on {columns}. Removing them...")
       else:
           print(f"✅ No duplicates found in {columns}.")
+          logging.info("No duplicates found in %s", columns)
 
       df = df.drop_duplicates(subset=columns, keep=keep)
       after = df.shape[0]
+      rows_dropped = before - after
       print(f"✅ {before - after} rows removed. New shape: {df.shape}")
+      logging.info("%s rows removed", rows_dropped)
 
       return df
   @staticmethod
@@ -331,6 +333,7 @@ class DataCleaner:
     print(null_values)
     output_file_path = os.path.join(self.output_path, 'cleaned_orders_table.parquet')
     orders_df.to_parquet(output_file_path)
+    return orders_df
   
   
   def clean_all_tables(self):
@@ -372,6 +375,17 @@ class FeatureEngineering:
         """
         Merge all necessary tables into a single DataFrame.
         """
+        required_keys = [
+        'cleaned_orders_table',
+        'cleaned_customer_table',
+        'cleaned_order_items_table',
+        'cleaned_order_payments_table',
+        'cleaned_reviews_table'
+        ]
+
+        missing_keys = [key for key in required_keys if key not in self.dfs]
+        if missing_keys:
+          raise ValueError(f"Missing cleaned tables: {missing_keys}")
         orders = self.dfs['cleaned_orders_table'].dropna()
         customers = self.dfs['cleaned_customer_table'].dropna()
         order_items = self.dfs['cleaned_order_items_table'].dropna()
