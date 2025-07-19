@@ -6,10 +6,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 
-
-
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s',  stream=sys.stdout  )
-
 class DataIngestion:
   def __init__(self, dataset, output_path):
     self.dataset = dataset
@@ -60,5 +57,7 @@ class DataIngestion:
       logging.exception("Error processing dataset: %s", e)
       print('exception')
       return None
-  def save_ingested_data(self):
+  def save_ingested_data(self): 
      dfs = self.load_data()
+     for name, df in dfs.items():
+        df.to_parquet(f"{self.output_path}/{name}.parquet")

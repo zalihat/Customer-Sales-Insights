@@ -1,9 +1,9 @@
 import logging
 import kagglehub
 import sys
-import subprocess
 import os
 import pandas as pd
+from pathlib import Path
 from datetime import timedelta
 import numpy as np
 from sklearn.utils import resample
@@ -14,45 +14,30 @@ from sklearn.impute import SimpleImputer
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s',  stream=sys.stdout  )
 
 class DataCleaner:
-  def __init__(self, dataset, output_path):
-    self.dataset = dataset
-    self.output_path = output_path
-    os.makedirs(self.output_path, exist_ok=True)
-  def download_dataset(self):
-      try:
-          path = kagglehub.dataset_download(self.dataset)
-          logging.info("Dataset downloaded successfully!")
-          logging.info("Path to dataset files: %s", path)
-          result = subprocess.run(["ls", path], capture_output=True, text=True)
-          if result.stdout:
-            logging.info("Dataset files:\n%s", result.stdout)
-          if result.stderr:
-            logging.error("Error listing files:\n%s", result.stderr)
-          return path
-      except Exception as e:
-          logging.exception("Error downloading dataset: %s", e)
-
-  def load_data(self):  
+  def __init__(self,bronze_path, silver_path):
+    self.bronze_path = bronze_path
+    self.silver_path = silver_path
+    os.makedirs(silver_path, exist_ok=True)
+  def load_data_bronze_layer(self):  
     try:
       # List all CSV files in the directory
-      path = self.download_dataset()
-      csv_files = [f for f in os.listdir(path) if f.endswith(".csv")]
-      if not csv_files:
-        logging.warning("No CSV files found in the dataset folder.")
-        # print("no files")
+      path = Path(self.bronze_path)
+      files = [f for f in path.iterdir()]
+      parquet_files = [f.name for f in files if f.suffix.endswith(".parquet")]
+      if not parquet_files:
+        logging.warning("No Parquet files found in the dataset folder.")
         return
-
-      logging.info("Found CSV files: %s", ", ".join(csv_files))
+      logging.info("Found Parquet files: %s", ", ".join(parquet_files))
 
       # Dictionary to store DataFrames
       dataframes = {}
 
         # Loop through each CSV file and create a DataFrame
-      for file in csv_files:
+      for file in parquet_files:
         # print(file)
         file_path = os.path.join(path, file)
-        df_name = file.replace(".csv", "")  # Remove .csv to create variable-friendly names
-        dataframes[df_name] = pd.read_csv(file_path)
+        df_name = file.replace(".parquet", "")  # Remove .csv to create variable-friendly names
+        dataframes[df_name] = pd.read_parquet(file_path)
         logging.info("Loaded DataFrame: %s (Shape: %s)", df_name, dataframes[df_name].shape)
         # print(f"Loaded DataFrame: {df_name} (Shape: {dataframes[df_name].shape})")
 
@@ -62,6 +47,7 @@ class DataCleaner:
       logging.exception("Error processing dataset: %s", e)
       print('exception')
       return None
+  
   @staticmethod
   def get_percentage_of_missing_values(df):
         # Calculate the percentage of missing values in each column
@@ -163,7 +149,7 @@ class DataCleaner:
     #Save processed product table as parquet
 
     logging.info("Checking datatypes of the columns:\n%s", product_table_translated.dtypes)
-    output_file_path = os.path.join(self.output_path, 'cleaned_product_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_product_table.parquet')
     product_table_translated.to_parquet(output_file_path)
 
     return product_table_translated
@@ -186,7 +172,7 @@ class DataCleaner:
     # Convert the columns to title case to avoid redundancy during analysis
     customer_table_df['customer_city']= customer_table_df['customer_city'].map(lambda x: x.title())
     customer_table_df['customer_state']= customer_table_df['customer_state'].map(lambda x: x.upper())
-    output_file_path = os.path.join(self.output_path, 'cleaned_customer_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_customer_table.parquet')
     customer_table_df.to_parquet(output_file_path)
     return customer_table_df
 
@@ -208,7 +194,7 @@ class DataCleaner:
     #convert the columns to uniform case to avoid redundancy during analysis
     geolocation_table_df['geolocation_city']= geolocation_table_df['geolocation_city'].map(lambda x: x.title())
     geolocation_table_df['geolocation_state']= geolocation_table_df['geolocation_state'].map(lambda x: x.upper())
-    output_file_path = os.path.join(self.output_path, 'cleaned_geolocation_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_geolocation_table.parquet')
     geolocation_table_df.to_parquet(output_file_path)
     return geolocation_table_df
 
@@ -229,7 +215,7 @@ class DataCleaner:
     print(order_items_df.dtypes)
     # Convert the shipping limit date to timestamp
     order_items_df['shipping_limit_date'] = pd.to_datetime(order_items_df['shipping_limit_date'])
-    output_file_path = os.path.join(self.output_path, 'cleaned_order_items_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_order_items_table.parquet')
     order_items_df.to_parquet(output_file_path)
     return order_items_df
 
@@ -249,7 +235,7 @@ class DataCleaner:
     print(order_payments_df.dtypes)
     # Convert the columns to title case to avoid redundancy during analysis
     order_payments_df['payment_type']= order_payments_df['payment_type'].map(lambda x: x.title())
-    output_file_path = os.path.join(self.output_path, 'cleaned_order_payments_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_order_payments_table.parquet')
     order_payments_df.to_parquet(output_file_path)
     return order_payments_df
 
@@ -271,7 +257,7 @@ class DataCleaner:
     # Check datatypes of Columns
     logging.info("Checking datatypes of the columns in the reviews table:\n%s", reviews_df.dtypes)
 
-    output_file_path = os.path.join(self.output_path, 'cleaned_reviews_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_reviews_table.parquet')
     reviews_df.to_parquet(output_file_path)
 
     print(reviews_df.dtypes)
@@ -291,7 +277,7 @@ class DataCleaner:
     # Convert the columns to title case to avoid redundancy during analysis
     sellers_df['seller_city']= sellers_df['seller_city'].map(lambda x: x.title())
     sellers_df['seller_state']= sellers_df['seller_state'].map(lambda x: x.upper())
-    output_file_path = os.path.join(self.output_path, 'cleaned_sellers_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_sellers_table.parquet')
     sellers_df.to_parquet(output_file_path)
     return sellers_df
 
@@ -331,13 +317,13 @@ class DataCleaner:
     null_values = self.get_percentage_of_missing_values(orders_df)
     logging.info("Percentage of Null values for each column in the orders table:\n%s\n", null_values)
     print(null_values)
-    output_file_path = os.path.join(self.output_path, 'cleaned_orders_table.parquet')
+    output_file_path = os.path.join(self.silver_path, 'cleaned_orders_table.parquet')
     orders_df.to_parquet(output_file_path)
     return orders_df
   
   
   def clean_all_tables(self):
-    dfs = self.load_data()
+    dfs = self.load_data_bronze_layer()
     # loop through the dataframes and create a csv 
     self.clean_product_table(dfs)
     self.clean_customer_table(dfs)
@@ -347,147 +333,4 @@ class DataCleaner:
     self.clean_reviews(dfs)
     self.clean_sellers_table(dfs)
     self.clean_orders_table(dfs)
-
-
-
-class FeatureEngineering:
-    def __init__(self, folder_path):
-        """
-        Initialize the FeatureEngineering class by loading parquet files.
-        """
-        self.folder_path = folder_path
-        self.dfs = self.load_dfs_from_parquet()
-        self.df = self.merge_tables()
-    
-    def load_dfs_from_parquet(self):
-        """
-        Loads all parquet files within a folder into a dictionary of DataFrames.
-        """
-        dfs = {}
-        for filename in os.listdir(self.folder_path):
-            if filename.endswith(".parquet"):
-                file_path = os.path.join(self.folder_path, filename)
-                df_name = filename[:-8]  # Remove ".parquet" from filename
-                dfs[df_name] = pd.read_parquet(file_path)
-        return dfs
-    
-    def merge_tables(self):
-        """
-        Merge all necessary tables into a single DataFrame.
-        """
-        required_keys = [
-        'cleaned_orders_table',
-        'cleaned_customer_table',
-        'cleaned_order_items_table',
-        'cleaned_order_payments_table',
-        'cleaned_reviews_table'
-        ]
-
-        missing_keys = [key for key in required_keys if key not in self.dfs]
-        if missing_keys:
-          raise ValueError(f"Missing cleaned tables: {missing_keys}")
-        orders = self.dfs['cleaned_orders_table'].dropna()
-        customers = self.dfs['cleaned_customer_table'].dropna()
-        order_items = self.dfs['cleaned_order_items_table'].dropna()
-        payments = self.dfs['cleaned_order_payments_table'].dropna()
-        reviews = self.dfs['cleaned_reviews_table'].dropna()
-        
-        df = orders.merge(customers, on="customer_id", how="left")
-        df = df.merge(order_items, on="order_id", how="left")
-        df = df.merge(payments, on="order_id", how="left")
-        df = df.merge(reviews, on="order_id", how="left")
-        return df
-    
-    def remove_outliers(self, df, column):
-        """
-        Removes outliers using IQR method.
-        """
-        Q1 = df[column].quantile(0.25)
-        Q3 = df[column].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        return df[(df[column] >= lower_bound) & (df[column] <= upper_bound)]
-
-    def feature_engineering(self):
-        """
-        Perform feature engineering on the merged dataset.
-        """
-        df = self.df.copy()
-
-        # Convert order timestamp to datetime
-        df["order_purchase_timestamp"] = pd.to_datetime(df["order_purchase_timestamp"])
-        
-        # Find last order date per unique customer
-        customer_last_order = df.groupby("customer_unique_id")["order_purchase_timestamp"].max().reset_index()
-        
-        # Define churn threshold (inactive for 6 months)
-        churn_threshold = df["order_purchase_timestamp"].max() - timedelta(days=180)
-        
-        # Label churn (1 if last purchase is older than 6 months, else 0)
-        customer_last_order["is_churned"] = (customer_last_order["order_purchase_timestamp"] < churn_threshold).astype(int)
-        
-        # Merge back
-        df = df.merge(customer_last_order[["customer_unique_id", "is_churned"]], on="customer_unique_id", how="left")
-        
-        # Create customer-level aggregated features
-        customer_features = df.groupby("customer_unique_id").agg(
-            customer_lifetime_orders=("order_id", "count"),
-            customer_avg_order_value=("payment_value", "mean"),
-            customer_days_since_last_order=("order_purchase_timestamp", lambda x: (df["order_purchase_timestamp"].max() - x.max()).days)
-        ).reset_index()
-        
-        # Identify high spenders
-        spend_threshold = df["payment_value"].quantile(0.90)
-        df["is_high_spender"] = (df["payment_value"] > spend_threshold).astype(int)
-        
-        # Payment features
-        customer_payment = df.groupby("customer_unique_id").agg(
-            customer_avg_installments=("payment_installments", "mean")
-        ).reset_index()
-        
-        # Customer experience features
-        customer_experience = df.groupby("customer_unique_id").agg(
-            avg_review_score=("review_score", "mean"),
-            total_reviews=("review_id", "count")
-        ).reset_index()
-        
-        # Merge all features into a final dataset
-        df = df.merge(customer_features, on="customer_unique_id", how="left")
-        df = df.merge(customer_payment, on="customer_unique_id", how="left")
-        df = df.merge(customer_experience, on="customer_unique_id", how="left")
-
-        # Remove outliers
-        df = self.remove_outliers(df, "customer_avg_order_value")
-        
-        # Fill missing values
-        imputer = SimpleImputer(strategy="median")
-        df[["customer_avg_order_value", "customer_avg_installments", "avg_review_score"]] = imputer.fit_transform(
-            df[["customer_avg_order_value", "customer_avg_installments", "avg_review_score"]])
-
-        # Feature Scaling
-        scaler = StandardScaler()
-        df[["customer_lifetime_orders", "customer_avg_order_value", "customer_avg_installments", "avg_review_score"]] = scaler.fit_transform(
-            df[["customer_lifetime_orders", "customer_avg_order_value", "customer_avg_installments", "avg_review_score"]])
-
-        # Select features and target
-        features = ["customer_lifetime_orders", "customer_avg_order_value",
-                    "customer_avg_installments", "avg_review_score"]
-        target = "is_churned"
-        # Separate churned and non-churned customers
-        df_churned = df[df["is_churned"] == 1]
-        df_non_churned = df[df["is_churned"] == 0]
-        # Upsample the minority class (non-churned customers)
-        df_non_churned_upsampled = resample(df_non_churned, 
-                                            replace=True,  # Allow duplicates
-                                            n_samples=len(df_churned), 
-                                            random_state=42)
-
-        # Combine with churned customers
-        df_balanced = pd.concat([df_churned, df_non_churned_upsampled])
-
-        X = df_balanced[features]
-        y = df_balanced[target]
-
-        return X, y
 
