@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from xgboost import XGBClassifier
-from preprocess import FeatureEngineering  # Import feature engineering class
+from feature_engineering import FeatureEngineering  # Import feature engineering class
 
 def train_model(folder_path):
     # Load and process data
@@ -29,7 +29,7 @@ def train_model(folder_path):
     # Train with early stopping
     model.fit(X_train, y_train, 
               eval_set=[(X_test, y_test)], 
-              early_stopping_rounds=20, 
+            #   early_stopping_rounds=20, 
               verbose=True)
     
     # Evaluate model
@@ -44,4 +44,4 @@ def train_model(folder_path):
     print("Model saved as xgboost_model.pkl")
     
 if __name__ == "__main__":
-    train_model("data/processed")
+    train_model("data/silver")
