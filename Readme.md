@@ -15,6 +15,7 @@ This project aims to predict customer churn using historical sales data. It foll
   - **data_ingestion.py** – Fetches sales data from an API and stores it in the `data/bronze/` directory
   - **data_cleaning.py** – Cleans the raw data and stores it in the `data/silver/` directory
   - **feature_engineering.py** – Creates features required for model training
+  - **customer_churn_model.py** - Trains and evaluate the customer churn model
 
 - **Notebook/**
   - **EDA.ipynb** – Exploratory Data Analysis notebook
